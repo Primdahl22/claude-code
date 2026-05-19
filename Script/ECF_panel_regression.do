@@ -46,14 +46,15 @@ clear all
 set more off
 set linesize 120
 version 17
+* Suppress graph windows so graph export works in batch/headless mode
+set graphics off
 
 * ── Set working directory (adjust to your folder) ───────────────────────────
 * cd "C:/Users/yourname/Documents/ECF"
 
 * ── Install required packages if missing ─────────────────────────────────────
-* xtserial is built into Stata 16+ (no install needed)
-* xttest3 is part of xttest2 on SSC
-local pkgs "estout outreg2 winsor2 xtunitroot xtcd2 xttest2"
+* xtserial and xttest3 are installed from SSC if missing
+local pkgs "estout outreg2 winsor2 xtunitroot xtcd2 xttest2 xttest3 xtserial"
 foreach pkg of local pkgs {
     capture which `pkg'
     if _rc != 0 {
@@ -174,7 +175,8 @@ misstable summarize book_leverage tangibility profitability ///
 *── Create lagged variables AFTER xtset ──────────────────────────────────────
 foreach var in book_leverage market_leverage tangibility profitability ///
                market_to_book_ratio intang_to_assets size ///
-               ind_median_book_leverage total_debt_thusd total_assets_thusd {
+               ind_median_book_leverage ind_median_mkt_leverage ///
+               total_debt_thusd total_assets_thusd {
     gen L_`var' = L.`var'
     label variable L_`var' "L. `var'"
 }
@@ -188,11 +190,12 @@ foreach var in book_leverage market_leverage tangibility profitability ///
 
 di _n "==== UNIT ROOT TESTS ===="
 
+* With T=4, lags(aic 4) exhausts all degrees of freedom; cap at 1.
 foreach var in book_leverage tangibility profitability market_to_book_ratio ///
                intang_to_assets size {
     di _n "--- `var' ---"
-    xtunitroot llc `var', lags(aic 4) kernel(bartlett 3) demean
-    xtunitroot ips `var', lags(aic 4) demean
+    xtunitroot llc `var', lags(aic 1) kernel(bartlett 3) demean
+    xtunitroot ips `var', lags(aic 1) demean
 }
 
 
@@ -364,10 +367,14 @@ xtserial book_leverage L_tangibility L_profitability ///
 
 * 12c. Pesaran CD test for cross-sectional dependence
 *      H0: errors are cross-sectionally independent
+*      xtcd2 has a known subscript bug on very large N panels; capture it.
 quietly xtreg book_leverage L_tangibility L_profitability ///
     L_market_to_book_ratio L_intang_to_assets L_size ///
     L_ind_median_book_leverage i.year, fe
-xtcd2
+capture xtcd2
+if _rc != 0 {
+    di as error "xtcd2 failed (r(" _rc ")). Try updating: ssc install xtcd2, replace"
+}
 
 
 /*─────────────────────────────────────────────────────────────────────────────
@@ -461,27 +468,27 @@ twoway (scatter uhat yhat, msize(vtiny) mcolor(navy%40)) ///
     yline(0, lcolor(black) lpattern(dash)) ///
     title("Residuals vs Fitted Values") ///
     xtitle("Fitted values") ytitle("Residuals") ///
-    name(resid_fitted, replace) nodraw
+    name(resid_fitted, replace)
 graph export "plot_resid_fitted.png", as(png) replace
 
 * Residual distribution
 histogram uhat, normal kdensity ///
     title("Distribution of Residuals (FE model)") ///
     xtitle("Residual") ytitle("Density") ///
-    name(hist_resid, replace) nodraw
+    name(hist_resid, replace)
 graph export "plot_resid_hist.png", as(png) replace
 
 * Normal probability plot
 qnorm uhat, ///
     title("Normal Probability Plot - FE Residuals") ///
-    name(qnorm_resid, replace) nodraw
+    name(qnorm_resid, replace)
 graph export "plot_qnorm.png", as(png) replace
 
 * Firm FE distribution
 histogram u_i, normal ///
     title("Distribution of Firm Fixed Effects") ///
     xtitle("Firm FE") ytitle("Density") ///
-    name(hist_fe, replace) nodraw
+    name(hist_fe, replace)
 graph export "plot_firm_fe_dist.png", as(png) replace
 
 * Mean leverage by year
@@ -494,7 +501,7 @@ preserve
         title("Mean Book Leverage by Year (+/- 1.96 SD)") ///
         xtitle("Year") ytitle("Mean Book Leverage") ///
         xlabel(2022(1)2025) legend(off) ///
-        name(lev_by_year, replace) nodraw
+        name(lev_by_year, replace)
     graph export "plot_leverage_trend.png", as(png) replace
 restore
 
