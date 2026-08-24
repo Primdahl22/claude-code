@@ -72,7 +72,10 @@ def fetch_stocks():
         group_by='ticker',
         auto_adjust=True,
         progress=False,
-        threads=True,
+        # threads=True hammers yfinance's shared sqlite cache concurrently and
+        # intermittently raises "database is locked"; sequential is reliable
+        # enough for a 25-ticker batch refreshed once per cache TTL.
+        threads=False,
     )
 
     results = []
@@ -151,16 +154,23 @@ def fetch_stocks():
 RSS_URL = 'https://www.globenewswire.com/RssFeed/country/Denmark'
 _RSS_HEADERS = {
     'User-Agent': (
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
         '(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
     ),
     'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+    'Accept-Language': 'en-US,en;q=0.9,da;q=0.8',
+    'Referer': 'https://www.globenewswire.com/',
 }
 _DC_NS = 'http://purl.org/dc/elements/1.1/'
 
 
 def fetch_news():
     resp = requests.get(RSS_URL, timeout=15, headers=_RSS_HEADERS)
+    if not resp.ok:
+        app.logger.warning(
+            'GlobeNewswire RSS returned %s: %s',
+            resp.status_code, resp.text[:300].replace('\n', ' '),
+        )
     resp.raise_for_status()
     root = ET.fromstring(resp.content)
     items = []

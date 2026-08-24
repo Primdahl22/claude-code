@@ -7,11 +7,11 @@
   {"date": "2026-09-04", "company": "A.P. Moller-Maersk A", "ticker": "MAERSK-A.CO", "report_type": "Q2 2026", "confirmed": true},
   {"date": "2026-09-04", "company": "A.P. Moller-Maersk B", "ticker": "MAERSK-B.CO", "report_type": "Q2 2026", "confirmed": true},
   {"date": "2026-09-05", "company": "Jyske Bank", "ticker": "JYSK.CO", "report_type": "Q2 2026", "confirmed": true},
-  {"date": "2026-09-10", "company": "Genmab", "ticker": "GENMAB.CO", "report_type": "Q2 2026", "confirmed": true},
+  {"date": "2026-09-10", "company": "Genmab", "ticker": "GMAB.CO", "report_type": "Q2 2026", "confirmed": true},
   {"date": "2026-09-10", "company": "NKT A/S", "ticker": "NKT.CO", "report_type": "Q2 2026", "confirmed": true},
   {"date": "2026-09-11", "company": "Coloplast B", "ticker": "COLO-B.CO", "report_type": "H1 2026 (FY Q4)", "confirmed": true},
-  {"date": "2026-09-12", "company": "Carlsberg B", "ticker": "CARLB.CO", "report_type": "Q2 2026", "confirmed": true},
-  {"date": "2026-09-16", "company": "Novonesis B", "ticker": "NZYM-B.CO", "report_type": "Q2 2026", "confirmed": true},
+  {"date": "2026-09-12", "company": "Carlsberg B", "ticker": "CARL-B.CO", "report_type": "Q2 2026", "confirmed": true},
+  {"date": "2026-09-16", "company": "Novonesis B", "ticker": "NSIS-B.CO", "report_type": "Q2 2026", "confirmed": true},
   {"date": "2026-09-17", "company": "Pandora", "ticker": "PNDORA.CO", "report_type": "Q2 2026", "confirmed": true},
   {"date": "2026-09-18", "company": "Demant", "ticker": "DEMANT.CO", "report_type": "Q2 2026", "confirmed": true},
   {"date": "2026-09-19", "company": "Ambu B", "ticker": "AMBU-B.CO", "report_type": "Q3 2026 (FY Q3)", "confirmed": false},
@@ -22,11 +22,11 @@
   {"date": "2026-10-01", "company": "Rockwool B", "ticker": "ROCK-B.CO", "report_type": "Q3 2026", "confirmed": true},
   {"date": "2026-10-02", "company": "GN Store Nord", "ticker": "GN.CO", "report_type": "Q3 2026", "confirmed": true},
   {"date": "2026-10-02", "company": "Netcompany", "ticker": "NETC.CO", "report_type": "Q3 2026", "confirmed": false},
-  {"date": "2026-10-08", "company": "Schouw & Co.", "ticker": "SCHB.CO", "report_type": "Q3 2026", "confirmed": true},
+  {"date": "2026-10-08", "company": "Schouw & Co.", "ticker": "SCHO.CO", "report_type": "Q3 2026", "confirmed": true},
   {"date": "2026-10-01", "company": "Bavarian Nordic", "ticker": "BAVA.CO", "report_type": "Q3 2026", "confirmed": true},
   {"date": "2026-11-05", "company": "Novo Nordisk B", "ticker": "NOVO-B.CO", "report_type": "Q3 2026", "confirmed": false},
   {"date": "2026-11-11", "company": "DSV A/S", "ticker": "DSV.CO", "report_type": "Q3 2026", "confirmed": false},
   {"date": "2026-11-04", "company": "Danske Bank", "ticker": "DANSKE.CO", "report_type": "Q3 2026", "confirmed": false},
   {"date": "2026-11-19", "company": "Vestas Wind Systems", "ticker": "VWS.CO", "report_type": "Q3 2026", "confirmed": false},
-  {"date": "2026-11-05", "company": "Genmab", "ticker": "GENMAB.CO", "report_type": "Q3 2026", "confirmed": false}
+  {"date": "2026-11-05", "company": "Genmab", "ticker": "GMAB.CO", "report_type": "Q3 2026", "confirmed": false}
 ]
