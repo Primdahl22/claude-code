@@ -411,7 +411,7 @@ header {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 60fr 40fr;
+  grid-template-columns: 42fr 29fr 29fr;
   grid-template-rows: 1fr;
   gap: 1px;
   background: var(--border);
@@ -428,18 +428,14 @@ header {
   min-height: 0;
 }
 
-/* -- Insights Grid (FX / Insider / Short Interest) -- */
+/* -- Insights Column (FX / Insider / Short Interest) -- */
 
-.insights-grid {
+.insights-column {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 26fr 37fr 37fr;
   gap: 1px;
   background: var(--border);
-  flex-shrink: 0;
-}
-
-.insights-grid .panel {
-  height: 280px;
+  min-height: 0;
 }
 
 /* ── Panel Base ──────────────────────────────── */
@@ -1378,8 +1374,9 @@ a.stock-link:hover .stock-ticker {
     height: auto;
   }
 
-  .right-column {
-    grid-template-rows: auto auto;
+  .right-column,
+  .insights-column {
+    grid-template-rows: auto auto auto;
   }
 
   #stocks-panel {
@@ -1394,8 +1391,10 @@ a.stock-link:hover .stock-ticker {
     height: 50vh;
   }
 
-  .insights-grid {
-    grid-template-columns: 1fr;
+  #fx-panel,
+  #insider-panel,
+  #short-panel {
+    height: 35vh;
   }
 }
 
