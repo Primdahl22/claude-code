@@ -428,6 +428,20 @@ header {
   min-height: 0;
 }
 
+/* -- Insights Grid (FX / Insider / Short Interest) -- */
+
+.insights-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.insights-grid .panel {
+  height: 280px;
+}
+
 /* ── Panel Base ──────────────────────────────── */
 
 .panel {
@@ -736,6 +750,20 @@ a.stock-link:hover .stock-ticker {
   color: var(--text-muted);
 }
 
+.no-data {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.sparkline {
+  display: block;
+  overflow: visible;
+}
+
+.spark-up { color: var(--positive); }
+.spark-down { color: var(--negative); }
+
 /* Flash animation for updated numbers */
 @keyframes flashGreen {
   0%   { background: var(--positive-dim); color: var(--positive); }
@@ -988,6 +1016,187 @@ a.stock-link:hover .stock-ticker {
   opacity: 1;
 }
 
+/* -- FX Panel -- */
+
+.fx-rates {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.fx-rate-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.fx-pair {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  width: 64px;
+  flex-shrink: 0;
+}
+
+.fx-value {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.fx-change {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  margin-left: auto;
+}
+
+.fx-change.positive { color: var(--positive); }
+.fx-change.negative { color: var(--negative); }
+.fx-change.neutral   { color: var(--text-muted); }
+
+.fx-exposure-list {
+  padding: 8px 16px;
+}
+
+.fx-exposure-heading {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.fx-exposure-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 0;
+}
+
+.fx-exposure-ticker {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  flex-shrink: 0;
+  width: 60px;
+}
+
+.fx-exposure-note {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* -- Insider Transactions Panel -- */
+
+.insider-list {
+  list-style: none;
+}
+
+.insider-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.insider-item:last-child {
+  border-bottom: none;
+}
+
+.insider-item a {
+  display: block;
+  padding: 10px 16px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.1s;
+}
+
+.insider-item a:hover {
+  background: var(--surface-2);
+}
+
+.insider-title {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+  display: block;
+}
+
+.insider-meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.insider-source {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.insider-time {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-dim);
+}
+
+/* -- Short Interest Panel -- */
+
+.short-list {
+  padding: 4px 0;
+}
+
+.short-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.short-row:last-child {
+  border-bottom: none;
+}
+
+.short-ticker {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  width: 56px;
+  flex-shrink: 0;
+}
+
+.short-holder {
+  font-family: var(--font-sans);
+  color: var(--text-muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.short-pct {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--warning);
+}
+
+.short-date {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
 /* ── Empty State ──────────────────────────────── */
 
 .empty-state {
@@ -1007,6 +1216,14 @@ a.stock-link:hover .stock-ticker {
 .empty-state-icon {
   font-size: 20px;
   opacity: 0.4;
+}
+
+.empty-state-sub {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0;
+  max-width: 220px;
 }
 
 /* ── Error Toast ──────────────────────────────── */
@@ -1175,6 +1392,10 @@ a.stock-link:hover .stock-ticker {
 
   #news-panel {
     height: 50vh;
+  }
+
+  .insights-grid {
+    grid-template-columns: 1fr;
   }
 }
 
