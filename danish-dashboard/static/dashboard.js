@@ -69,6 +69,26 @@ function tickerUrl(ticker) {
   return YAHOO_QUOTE_BASE + encodeURIComponent(ticker || '');
 }
 
+// --- Sparkline: inline SVG mini price chart from a close-price series ---
+function sparklineSVG(values) {
+  if (!values || values.length < 2) return '<span class="no-data">—</span>';
+  const w = 64, h = 22, pad = 2;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = (max - min) || 1;
+  const step = (w - pad * 2) / (values.length - 1);
+  const points = values.map((v, i) => {
+    const x = pad + i * step;
+    const y = h - pad - ((v - min) / range) * (h - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const trendUp = values[values.length - 1] >= values[0];
+  const cls = trendUp ? 'spark-up' : 'spark-down';
+  return `<svg class="sparkline ${cls}" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <polyline points="${points}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"></polyline>
+  </svg>`;
+}
+
 function reportTypeClass(reportType) {
   if (!reportType) return 'full';
   const t = reportType.toLowerCase();
@@ -221,6 +241,7 @@ function renderStocks(payload) {
       <td><span class="price-value ${flashClass}">${fmtPrice(s.price)}</span></td>
       <td><span class="change-pct ${pctClass}">${pctDisplay}</span></td>
       <td><span class="volume-value">${fmtVolume(s.volume)}</span></td>
+      <td>${sparklineSVG(s.sparkline)}</td>
     </tr>`;
   }).join('');
 
@@ -236,6 +257,7 @@ function renderStocks(payload) {
         ${th('price', SORT_COLUMNS.price)}
         ${th('change_pct', SORT_COLUMNS.change_pct)}
         ${th('volume', SORT_COLUMNS.volume)}
+        ${th(null, 'Trend (30d)')}
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -325,8 +347,97 @@ function renderNews(payload) {
   el.innerHTML = `<ul class="news-list">${html}</ul>`;
 }
 
+// --- Render: FX exposure ---
+function renderFx(payload) {
+  const fx = payload.fx || {};
+  const rates = fx.rates || [];
+  const exposure = fx.exposure || [];
+  const el = document.getElementById('fx-body');
+
+  if (!rates.length) {
+    el.innerHTML = '<div class="empty-state"><span class="empty-state-icon">💱</span><span>Ingen valutakurser tilgængelige</span></div>';
+    return;
+  }
+
+  const rateHtml = rates.map(r => {
+    const cls = r.change_pct > 0 ? 'positive' : r.change_pct < 0 ? 'negative' : 'neutral';
+    const sign = r.change_pct > 0 ? '+' : '';
+    return `<div class="fx-rate-row">
+      <span class="fx-pair">${r.pair}</span>
+      <span class="fx-value">${r.rate != null ? r.rate.toFixed(4) : '—'}</span>
+      <span class="fx-change ${cls}">${r.change_pct != null ? sign + r.change_pct.toFixed(2) + '%' : '—'}</span>
+    </div>`;
+  }).join('');
+
+  const exposureHtml = exposure.length ? `<div class="fx-exposure-list">
+    <div class="fx-exposure-heading">Selskaber med betydelig ikke-DKK omsætning</div>
+    ${exposure.map(e => `
+      <div class="fx-exposure-row">
+        <a href="${tickerUrl(e.ticker)}" target="_blank" rel="noopener noreferrer" class="fx-exposure-ticker">${e.ticker.replace('.CO', '')}</a>
+        <span class="fx-exposure-note">${e.note}</span>
+      </div>`).join('')}
+  </div>` : '';
+
+  el.innerHTML = `<div class="fx-rates">${rateHtml}</div>${exposureHtml}`;
+}
+
+// --- Render: Insider transactions (PDMR notifications tagged from the news feed) ---
+function renderInsider(payload) {
+  const items = payload.insider || [];
+  const el = document.getElementById('insider-body');
+
+  if (!items.length) {
+    el.innerHTML = '<div class="empty-state"><span class="empty-state-icon">🔍</span><span>Ingen insiderhandler fundet i seneste nyheder</span></div>';
+    return;
+  }
+
+  const html = items.slice(0, 20).map(item => `
+    <li class="insider-item">
+      <a href="${item.link}" target="_blank" rel="noopener noreferrer">
+        <span class="insider-title">${item.title}</span>
+        <div class="insider-meta">
+          <span class="insider-source">${item.source}</span>
+          <span class="insider-time">${fmtTimeAgo(item.published)}</span>
+        </div>
+      </a>
+    </li>`).join('');
+
+  el.innerHTML = `<ul class="insider-list">${html}</ul>`;
+}
+
+// --- Render: Short interest (experimental Finanstilsynet scrape) ---
+function renderShortInterest(payload) {
+  const items = payload.short_interest || [];
+  const el = document.getElementById('short-body');
+
+  if (!items.length) {
+    el.innerHTML = `<div class="empty-state">
+      <span class="empty-state-icon">🧪</span>
+      <span>Ingen kortsalgsdata</span>
+      <span class="empty-state-sub">Eksperimentel kilde - se opdateringsstatus for fejlbesked</span>
+    </div>`;
+    return;
+  }
+
+  const html = items.map(item => `
+    <div class="short-row">
+      <a href="${tickerUrl(item.ticker)}" target="_blank" rel="noopener noreferrer" class="short-ticker">${item.ticker.replace('.CO', '')}</a>
+      <span class="short-holder">${item.position_holder || '—'}</span>
+      <span class="short-pct">${item.net_short_pct || '—'}</span>
+      <span class="short-date">${item.position_date || ''}</span>
+    </div>`).join('');
+
+  el.innerHTML = `<div class="short-list">${html}</div>`;
+}
+
 // --- Status panel: persistent view of what was fetched, when, and any errors ---
-const SOURCE_LABELS = { stocks: 'Aktiekurser (Yahoo Finance)', news: 'Nyheder (GlobeNewswire)', calendar: 'Regnskabskalender' };
+const SOURCE_LABELS = {
+  stocks: 'Aktiekurser (Yahoo Finance)',
+  news: 'Nyheder (GlobeNewswire)',
+  calendar: 'Regnskabskalender',
+  fx: 'Valutakurser (Yahoo Finance)',
+  short_interest: 'Kortsalg (Finanstilsynet, eksperimentel)',
+};
 
 function fmtDuration(seconds) {
   if (seconds == null) return '—';
@@ -399,16 +510,22 @@ async function fetchDashboardData() {
   let anyStale = false;
 
   try {
-    const [stocksRes, newsRes, calRes] = await Promise.all([
+    const [stocksRes, newsRes, calRes, insiderRes, fxRes, shortRes] = await Promise.all([
       fetch('/api/stocks'),
       fetch('/api/news'),
       fetch('/api/calendar'),
+      fetch('/api/insider'),
+      fetch('/api/fx'),
+      fetch('/api/short-interest'),
     ]);
 
-    const [stocksData, newsData, calData] = await Promise.all([
+    const [stocksData, newsData, calData, insiderData, fxData, shortData] = await Promise.all([
       stocksRes.ok ? stocksRes.json() : Promise.resolve(null),
       newsRes.ok ? newsRes.json() : Promise.resolve(null),
       calRes.ok ? calRes.json() : Promise.resolve(null),
+      insiderRes.ok ? insiderRes.json() : Promise.resolve(null),
+      fxRes.ok ? fxRes.json() : Promise.resolve(null),
+      shortRes.ok ? shortRes.json() : Promise.resolve(null),
     ]);
 
     if (stocksData) { renderStocks(stocksData); if (stocksData.stale) anyStale = true; }
@@ -419,6 +536,13 @@ async function fetchDashboardData() {
 
     if (calData) { renderCalendar(calData); if (calData.stale) anyStale = true; }
     else showToast('Kunne ikke hente kalender');
+
+    // Insider/FX/short-interest failures don't block the core dashboard or
+    // flip the global status to "stale" - they're supplementary panels with
+    // their own empty/error states, visible via the status panel.
+    if (insiderData) renderInsider(insiderData);
+    if (fxData) renderFx(fxData);
+    if (shortData) renderShortInterest(shortData);
 
     showStaleBanner(anyStale);
     setStatus(anyStale ? 'stale' : 'ok', anyStale ? 'Forældet' : 'Live');
