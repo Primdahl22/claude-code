@@ -18,7 +18,7 @@ app = Flask(__name__)
 # ---------------------------------------------------------------------------
 _cache = {}
 _last_error = {}
-_DEFAULT_TTLS = {'stocks': 900, 'news': 900, 'calendar': 3600}
+_DEFAULT_TTLS = {'stocks': 900, 'news': 900, 'calendar': 3600, 'fx': 900, 'short_interest': 21600}
 
 
 def get_cached(key, fetch_fn, ttl=900):
@@ -70,9 +70,12 @@ def fetch_stocks():
     name_map = {c['ticker']: c['name'] for c in companies}
     sector_map = {c['ticker']: c['sector'] for c in companies}
 
+    # period='3mo' gives enough trading days for a meaningful sparkline while
+    # still being one batch call - the response is bigger but not the number
+    # of requests, so this doesn't meaningfully slow the fetch down.
     data = yf.download(
         tickers,
-        period='5d',
+        period='3mo',
         interval='1d',
         group_by='ticker',
         auto_adjust=True,
@@ -84,6 +87,7 @@ def fetch_stocks():
     )
 
     results = []
+    SPARKLINE_POINTS = 30
 
     def _build_entry(ticker, closes, volumes, highs, lows):
         price = _safe_float(closes[-1]) if closes else None
@@ -94,6 +98,11 @@ def fetch_stocks():
         if price is not None and prev_close is not None and prev_close != 0:
             change = round(price - prev_close, 4)
             change_pct = round((price - prev_close) / prev_close * 100, 2)
+        sparkline = [
+            round(v, 2) for v in (
+                _safe_float(c) for c in closes[-SPARKLINE_POINTS:]
+            ) if v is not None
+        ]
         return {
             'ticker': ticker,
             'name': name_map.get(ticker, ticker),
@@ -105,6 +114,7 @@ def fetch_stocks():
             'volume': volume,
             'day_high': round(_safe_float(highs[-1]), 2) if highs and _safe_float(highs[-1]) is not None else None,
             'day_low': round(_safe_float(lows[-1]), 2) if lows and _safe_float(lows[-1]) is not None else None,
+            'sparkline': sparkline,
         }
 
     if len(tickers) == 1:
@@ -144,6 +154,7 @@ def fetch_stocks():
                     'volume': None,
                     'day_high': None,
                     'day_low': None,
+                    'sparkline': [],
                 })
         if missing:
             app.logger.warning('yfinance returned no column at all for: %s', ', '.join(missing))
@@ -163,6 +174,27 @@ RSS_URL = 'https://www.globenewswire.com/RssFeed/country/Denmark'
 # request to the same URL works fine, confirming this is fingerprint-based
 # bot mitigation rather than the feed being down or IP-blocked.
 _DC_NS = 'http://purl.org/dc/elements/1.1/'
+
+# EU Market Abuse Regulation (MAR) requires listed companies to disclose
+# trades by "persons discharging managerial responsibilities" (PDMR) -
+# executives, board members, and their closely associated persons. These
+# releases go out through the same GlobeNewswire feed we already fetch, so
+# rather than a second network call we tag matching items in place.
+_INSIDER_KEYWORDS = (
+    'managers’ transaction',
+    'managers transaction',
+    "manager's transaction",
+    'managerial responsibilit',
+    'pdmr',
+    'persons discharging managerial',
+    'notification of transactions by',
+    'insider transaction',
+)
+
+
+def _is_insider_item(title, description):
+    haystack = f'{title} {description}'.lower()
+    return any(kw in haystack for kw in _INSIDER_KEYWORDS)
 
 
 def fetch_news():
@@ -196,8 +228,134 @@ def fetch_news():
             'published': published,
             'description': desc,
             'source': source,
+            'is_insider': _is_insider_item(title, desc),
         })
     return items
+
+
+# ---------------------------------------------------------------------------
+# FX exposure (DKK is EUR-pegged, but several C25 companies have large
+# non-DKK/EUR revenue exposure - USD in particular).
+# ---------------------------------------------------------------------------
+FX_PAIRS = ['DKK=X', 'EURDKK=X']  # Yahoo: DKK=X is USD/DKK
+FX_LABELS = {'DKK=X': 'USD/DKK', 'EURDKK=X': 'EUR/DKK'}
+
+# Qualitative notes, not precise disclosed percentages - flagged as such in
+# the UI. Based on general knowledge of each company's business, not a
+# specific filing.
+FX_EXPOSURE_NOTES = {
+    'NOVO-B.CO': 'Stor andel af omsætningen faktureres i USD (USA er største marked).',
+    'GMAB.CO': 'Indtægter fra amerikanske partnerskaber overvejende i USD.',
+    'DSV.CO': 'Global fragt- og logistikpriser sættes typisk i USD.',
+    'MAERSK-A.CO': 'Fragtrater i containershipping er overvejende USD-denomineret.',
+    'MAERSK-B.CO': 'Fragtrater i containershipping er overvejende USD-denomineret.',
+    'VWS.CO': 'Eksportsalg af vindmøller prissat i blanding af USD og EUR.',
+    'COLO-B.CO': 'Betydeligt USD-salg via det amerikanske marked.',
+    'DEMANT.CO': 'Global høreapparat-omsætning med stor USD-andel.',
+    'AMBU-B.CO': 'Stor del af omsætningen fra det amerikanske marked (USD).',
+}
+
+
+def fetch_fx():
+    data = yf.download(
+        FX_PAIRS,
+        period='5d',
+        interval='1d',
+        group_by='ticker',
+        auto_adjust=True,
+        progress=False,
+        threads=False,
+    )
+
+    rates = []
+    for pair in FX_PAIRS:
+        try:
+            pair_data = data[pair]
+            closes = pair_data['Close'].dropna().tolist()
+            rate = _safe_float(closes[-1]) if closes else None
+            prev = _safe_float(closes[-2]) if len(closes) >= 2 else None
+            change_pct = (
+                round((rate - prev) / prev * 100, 3)
+                if rate is not None and prev is not None and prev != 0
+                else None
+            )
+            rates.append({
+                'pair': FX_LABELS.get(pair, pair),
+                'rate': round(rate, 4) if rate is not None else None,
+                'change_pct': change_pct,
+            })
+        except (KeyError, IndexError):
+            app.logger.warning('No FX data returned for %s', pair)
+            rates.append({'pair': FX_LABELS.get(pair, pair), 'rate': None, 'change_pct': None})
+
+    exposure = [
+        {'ticker': ticker, 'name': next((c['name'] for c in companies if c['ticker'] == ticker), ticker), 'note': note}
+        for ticker, note in FX_EXPOSURE_NOTES.items()
+    ]
+
+    return {'rates': rates, 'exposure': exposure}
+
+
+# ---------------------------------------------------------------------------
+# Short interest (Finanstilsynet net short position register)
+#
+# EXPERIMENTAL: under EU Short Selling Regulation (236/2012), the Danish FSA
+# (Finanstilsynet) must publicly disclose net short positions >=0.5% of a
+# company's share capital. This scraper targets their public disclosure
+# page, but the exact URL/table structure could not be verified from the
+# sandboxed environment this was built in (no outbound network access there).
+# It is written defensively - a parsing failure surfaces as a normal error
+# in /api/status rather than crashing anything, and it needs to be tested
+# against the live site and adjusted based on what actually comes back.
+# ---------------------------------------------------------------------------
+SHORT_INTEREST_URL = 'https://www.finanstilsynet.dk/en/short-selling'
+
+
+def fetch_short_interest():
+    from bs4 import BeautifulSoup
+
+    resp = curl_requests.get(SHORT_INTEREST_URL, timeout=20, impersonate='chrome124')
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, 'html.parser')
+
+    results = []
+    for table in soup.find_all('table'):
+        rows = table.find_all('tr')
+        if not rows:
+            continue
+        header_cells = rows[0].find_all(['th', 'td'])
+        header_text = ' '.join(c.get_text(strip=True).lower() for c in header_cells)
+        if 'short' not in header_text and 'position' not in header_text:
+            continue  # not the short-position table
+
+        for row in rows[1:]:
+            cells = [c.get_text(strip=True) for c in row.find_all('td')]
+            if len(cells) < 3:
+                continue
+            issuer_raw = cells[0]
+            matched = next(
+                (c for c in companies if c['name'].split()[0].lower() in issuer_raw.lower()),
+                None,
+            )
+            if not matched:
+                continue
+            results.append({
+                'ticker': matched['ticker'],
+                'company': matched['name'],
+                'issuer_raw': issuer_raw,
+                'position_holder': cells[1] if len(cells) > 1 else '',
+                'net_short_pct': cells[2] if len(cells) > 2 else '',
+                'position_date': cells[3] if len(cells) > 3 else '',
+            })
+
+    if not results:
+        app.logger.warning(
+            'Short interest scrape returned 0 matches - the page structure '
+            'likely does not match what fetch_short_interest() expects; '
+            'needs inspection against the live page.'
+        )
+
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +422,55 @@ def api_calendar():
         'fetched_at': (
             datetime.utcfromtimestamp(_cache['calendar']['ts']).isoformat() + 'Z'
             if 'calendar' in _cache else None
+        ),
+    })
+
+
+@app.get('/api/insider')
+def api_insider():
+    try:
+        data, stale = get_cached('news', fetch_news)
+    except Exception as e:
+        return jsonify({'error': str(e), 'insider': []}), 502
+    insider_items = [n for n in data if n.get('is_insider')]
+    return jsonify({
+        'insider': insider_items,
+        'stale': stale,
+        'fetched_at': (
+            datetime.utcfromtimestamp(_cache['news']['ts']).isoformat() + 'Z'
+            if 'news' in _cache else None
+        ),
+    })
+
+
+@app.get('/api/fx')
+def api_fx():
+    try:
+        data, stale = get_cached('fx', fetch_fx)
+    except Exception as e:
+        return jsonify({'error': str(e), 'fx': {}}), 502
+    return jsonify({
+        'fx': data,
+        'stale': stale,
+        'fetched_at': (
+            datetime.utcfromtimestamp(_cache['fx']['ts']).isoformat() + 'Z'
+            if 'fx' in _cache else None
+        ),
+    })
+
+
+@app.get('/api/short-interest')
+def api_short_interest():
+    try:
+        data, stale = get_cached('short_interest', fetch_short_interest, ttl=21600)
+    except Exception as e:
+        return jsonify({'error': str(e), 'short_interest': []}), 502
+    return jsonify({
+        'short_interest': data,
+        'stale': stale,
+        'fetched_at': (
+            datetime.utcfromtimestamp(_cache['short_interest']['ts']).isoformat() + 'Z'
+            if 'short_interest' in _cache else None
         ),
     })
 
