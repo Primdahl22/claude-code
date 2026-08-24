@@ -27,7 +27,8 @@ def get_cached(key, fetch_fn, ttl=900):
         data = fetch_fn()
         _cache[key] = {'data': data, 'ts': now}
         return data, False
-    except Exception:
+    except Exception as e:
+        app.logger.warning('Fetch failed for %r: %s', key, e)
         if key in _cache:
             return _cache[key]['data'], True  # stale data on error
         raise
@@ -105,9 +106,13 @@ def fetch_stocks():
         volumes = data['Volume'].dropna().tolist()
         highs = data['High'].dropna().tolist()
         lows = data['Low'].dropna().tolist()
+        if not closes:
+            app.logger.warning('No price data returned for %s', ticker)
         results.append(_build_entry(ticker, closes, volumes, highs, lows))
     else:
         # Multi-ticker: top-level columns are ticker symbols
+        missing = []
+        empty = []
         for ticker in tickers:
             try:
                 ticker_data = data[ticker]
@@ -115,8 +120,11 @@ def fetch_stocks():
                 volumes = ticker_data['Volume'].dropna().tolist()
                 highs = ticker_data['High'].dropna().tolist()
                 lows = ticker_data['Low'].dropna().tolist()
+                if not closes:
+                    empty.append(ticker)
                 results.append(_build_entry(ticker, closes, volumes, highs, lows))
             except (KeyError, IndexError):
+                missing.append(ticker)
                 results.append({
                     'ticker': ticker,
                     'name': name_map.get(ticker, ticker),
@@ -129,6 +137,10 @@ def fetch_stocks():
                     'day_high': None,
                     'day_low': None,
                 })
+        if missing:
+            app.logger.warning('yfinance returned no column at all for: %s', ', '.join(missing))
+        if empty:
+            app.logger.warning('yfinance returned a column but no price rows for: %s', ', '.join(empty))
 
     return results
 
