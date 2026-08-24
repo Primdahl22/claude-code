@@ -17,20 +17,25 @@ app = Flask(__name__)
 # In-memory cache with 15-minute TTL
 # ---------------------------------------------------------------------------
 _cache = {}
+_last_error = {}
+_DEFAULT_TTLS = {'stocks': 900, 'news': 900, 'calendar': 3600}
 
 
 def get_cached(key, fetch_fn, ttl=900):
     now = time.time()
-    if key in _cache and now - _cache[key]['ts'] < ttl:
-        return _cache[key]['data'], False  # data, is_stale
+    entry = _cache.get(key)
+    if entry and now - entry['ts'] < ttl:
+        return entry['data'], False  # data, is_stale
     try:
         data = fetch_fn()
-        _cache[key] = {'data': data, 'ts': now}
+        _cache[key] = {'data': data, 'ts': now, 'ttl': ttl}
+        _last_error[key] = None
         return data, False
     except Exception as e:
         app.logger.warning('Fetch failed for %r: %s', key, e)
-        if key in _cache:
-            return _cache[key]['data'], True  # stale data on error
+        _last_error[key] = {'message': str(e), 'ts': now}
+        if entry:
+            return entry['data'], True  # stale data on error
         raise
 
 
@@ -260,6 +265,41 @@ def api_calendar():
             datetime.utcfromtimestamp(_cache['calendar']['ts']).isoformat() + 'Z'
             if 'calendar' in _cache else None
         ),
+    })
+
+
+@app.get('/api/status')
+def api_status():
+    now = time.time()
+    sources = {}
+    for key, default_ttl in _DEFAULT_TTLS.items():
+        entry = _cache.get(key)
+        err = _last_error.get(key)
+        if entry:
+            age = now - entry['ts']
+            ttl = entry.get('ttl', default_ttl)
+            sources[key] = {
+                'fetched_at': datetime.utcfromtimestamp(entry['ts']).isoformat() + 'Z',
+                'age_seconds': int(age),
+                'ttl_seconds': ttl,
+                'next_refresh_in': max(0, int(ttl - age)),
+                'stale': age >= ttl,
+            }
+        else:
+            sources[key] = {
+                'fetched_at': None,
+                'age_seconds': None,
+                'ttl_seconds': default_ttl,
+                'next_refresh_in': None,
+                'stale': None,
+            }
+        sources[key]['last_error'] = err['message'] if err else None
+        sources[key]['last_error_at'] = (
+            datetime.utcfromtimestamp(err['ts']).isoformat() + 'Z' if err else None
+        )
+    return jsonify({
+        'sources': sources,
+        'server_time': datetime.utcnow().isoformat() + 'Z',
     })
 
 
