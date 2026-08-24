@@ -7,8 +7,8 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, date
 from email.utils import parsedate_to_datetime
 
-import requests
 import yfinance as yf
+from curl_cffi import requests as curl_requests
 from flask import Flask, jsonify, render_template
 
 app = Flask(__name__)
@@ -152,20 +152,16 @@ def fetch_stocks():
 # News fetch (GlobeNewswire RSS — Denmark)
 # ---------------------------------------------------------------------------
 RSS_URL = 'https://www.globenewswire.com/RssFeed/country/Denmark'
-_RSS_HEADERS = {
-    'User-Agent': (
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
-        '(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-    ),
-    'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-    'Accept-Language': 'en-US,en;q=0.9,da;q=0.8',
-    'Referer': 'https://www.globenewswire.com/',
-}
+# GlobeNewswire silently stalls (read-timeout, not a clean 403) requests made
+# with Python's default TLS/HTTP fingerprint. curl_cffi impersonates a real
+# Chrome build's TLS/HTTP2 fingerprint, which gets through — a plain browser
+# request to the same URL works fine, confirming this is fingerprint-based
+# bot mitigation rather than the feed being down or IP-blocked.
 _DC_NS = 'http://purl.org/dc/elements/1.1/'
 
 
 def fetch_news():
-    resp = requests.get(RSS_URL, timeout=15, headers=_RSS_HEADERS)
+    resp = curl_requests.get(RSS_URL, timeout=15, impersonate='chrome124')
     if not resp.ok:
         app.logger.warning(
             'GlobeNewswire RSS returned %s: %s',
@@ -179,8 +175,9 @@ def fetch_news():
         link = item.findtext('link', '') or ''
         desc_raw = item.findtext('description', '')
         desc = html_mod.unescape(desc_raw)[:300] if desc_raw else ''
-        creator_el = item.find(f'{{{_DC_NS}}}creator')
-        source = (creator_el.text or 'GlobeNewswire').strip() if creator_el is not None else 'GlobeNewswire'
+        # This feed uses dc:contributor for the company name (no dc:creator).
+        contributor_el = item.find(f'{{{_DC_NS}}}contributor')
+        source = (contributor_el.text or 'GlobeNewswire').strip() if contributor_el is not None else 'GlobeNewswire'
         pub_raw = item.findtext('pubDate', '')
         published = ''
         if pub_raw:
