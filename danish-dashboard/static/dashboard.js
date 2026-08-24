@@ -1,17 +1,17 @@
 'use strict';
 
-// ─── Config ──────────────────────────────────────────────────────────────────────────────
+// --- Config ---
 const REFRESH_MS = 900_000; // 15 minutes
 const YAHOO_QUOTE_BASE = 'https://finance.yahoo.com/quote/';
 
-// ─── State ──────────────────────────────────────────────────────────────────────────────
+// --- State ---
 let nextRefreshAt = Date.now() + REFRESH_MS;
 let countdownTimer = null;
 let prevPrices = {};
 let lastStocks = [];
 let sortState = { key: null, dir: 1 }; // dir: 1 = asc, -1 = desc
 
-// ─── Countdown ───────────────────────────────────────────────────────────────────────────
+// --- Countdown ---
 function startCountdown() {
   if (countdownTimer) clearInterval(countdownTimer);
   nextRefreshAt = Date.now() + REFRESH_MS;
@@ -23,7 +23,7 @@ function startCountdown() {
   }, 1_000);
 }
 
-// ─── Formatters ───────────────────────────────────────────────────────────────────────────
+// --- Formatters ---
 function fmtPrice(p) {
   if (p == null) return '—';
   return Number(p).toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -81,7 +81,7 @@ function reportTypeClass(reportType) {
   return 'full';
 }
 
-// ─── Market open/closed badge (Nasdaq Copenhagen, 09:00–17:00 CET/CEST, Mon–Fri) ─────
+// --- Market open/closed badge (Nasdaq Copenhagen, 09:00–17:00 CET/CEST, Mon–Fri) ---
 function updateMarketBadge() {
   const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Europe/Copenhagen',
@@ -108,7 +108,7 @@ function updateMarketBadge() {
   text.textContent = isOpen ? 'Marked åbent' : 'Marked lukket';
 }
 
-// ─── Status indicator ───────────────────────────────────────────────────────────────────────────
+// --- Status indicator ---
 function setStatus(state, text) {
   const dot = document.getElementById('status-dot');
   const label = document.getElementById('status-text');
@@ -116,12 +116,12 @@ function setStatus(state, text) {
   label.textContent = text;
 }
 
-// ─── Stale banner ──────────────────────────────────────────────────────────────────────────────
+// --- Stale banner ---
 function showStaleBanner(show) {
   document.getElementById('stale-banner').classList.toggle('hidden', !show);
 }
 
-// ─── Error toast ──────────────────────────────────────────────────────────────────────────────
+// --- Error toast ---
 let toastTimer = null;
 function showToast(msg) {
   const toast = document.getElementById('error-toast');
@@ -131,7 +131,7 @@ function showToast(msg) {
   toastTimer = setTimeout(() => toast.classList.add('hidden'), 5_000);
 }
 
-// ─── Movers strip: biggest gainer / loser at a glance ────────────────────────
+// --- Movers strip: biggest gainer / loser at a glance ---
 function renderMoversStrip(stocks) {
   const el = document.getElementById('movers-strip');
   if (!el) return;
@@ -151,7 +151,7 @@ function renderMoversStrip(stocks) {
   el.innerHTML = chip('Dagens vinder', gainer, 'positive') + chip('Dagens taber', loser, 'negative');
 }
 
-// ─── Sortable column headers ────────────────────────────────────────────────────────
+// --- Sortable column headers ---
 const SORT_COLUMNS = { price: 'Kurs', change_pct: 'Ændring', volume: 'Volumen' };
 
 function setSort(key) {
@@ -166,10 +166,10 @@ function setSort(key) {
 
 function sortArrow(key) {
   if (sortState.key !== key) return '';
-  return sortState.dir === 1 ? ' ▲' : ' ▼';
+  return sortState.dir === 1 ? ' ^' : ' v';
 }
 
-// ─── Render: Stocks ───────────────────────────────────────────────────────────────────────────
+// --- Render: Stocks ---
 function renderStocks(payload) {
   const stocks = payload.stocks || [];
   lastStocks = stocks;
@@ -244,7 +244,8 @@ function renderStocks(payload) {
   prevPrices = newPrices;
 }
 
-// ─── Render: Calendar ────────────────────────────────────────────────────────────────────────────────nfunction renderCalendar(payload) {
+// --- Render: Calendar ---
+function renderCalendar(payload) {
   const items = payload.calendar || [];
   const el = document.getElementById('calendar-body');
   const today = new Date();
@@ -294,7 +295,8 @@ function renderStocks(payload) {
   el.innerHTML = `<ul class="calendar-list">${html}</ul>`;
 }
 
-// ─── Render: News ──────────────────────────────────────────────────────────────────────────────nfunction renderNews(payload) {
+// --- Render: News ---
+function renderNews(payload) {
   const items = payload.news || [];
   const el = document.getElementById('news-body');
 
@@ -323,7 +325,7 @@ function renderStocks(payload) {
   el.innerHTML = `<ul class="news-list">${html}</ul>`;
 }
 
-// ─── Status panel: persistent view of what was fetched, when, and any errors ────
+// --- Status panel: persistent view of what was fetched, when, and any errors ---
 const SOURCE_LABELS = { stocks: 'Aktiekurser (Yahoo Finance)', news: 'Nyheder (GlobeNewswire)', calendar: 'Regnskabskalender' };
 
 function fmtDuration(seconds) {
@@ -388,7 +390,7 @@ document.addEventListener('click', (e) => {
   panel.classList.add('hidden');
 });
 
-// ─── Main fetch ───────────────────────────────────────────────────────────────────────────
+// --- Main fetch ---
 async function fetchDashboardData() {
   const btn = document.getElementById('refresh-btn');
   btn.classList.add('spinning');
@@ -439,7 +441,7 @@ async function fetchDashboardData() {
   }
 }
 
-// ─── Boot ────────────────────────────────────────────────────────────────────────────
+// --- Boot ---
 document.addEventListener('DOMContentLoaded', () => {
   fetchDashboardData();
   setInterval(fetchDashboardData, REFRESH_MS);
